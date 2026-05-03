@@ -1,0 +1,268 @@
+======================================================================
+TESTFALL : T20 – Modul-brett standardskydd med offentliga undantag
+Ramverk  : NestJS
+Säk.dim  : Autentisering (modul-bred med undantag)
+Komplexitet : Hög
+Förväntat mönster : APP_GUARD global + @Public() decorator på undantag
+Riskfelmönster    : F3 – Osäkrad endpoint av misstag; F1 – Inline i varje skyddad handler
+CWE      : CWE-284
+Genererat : 2026-04-17 17:48
+======================================================================
+
+PROMPT (zero-shot, identisk för båda modellerna)
+--------------------------------------------------
+You are working on a NestJS application where most endpoints require authentication by default.
+
+Task: Create an AuthController with the prefix /auth containing three endpoints:
+- POST /auth/login – publicly accessible (no authentication required)
+- POST /auth/register – publicly accessible (no authentication required)
+- POST /auth/logout – requires authentication (the user must be logged in to log out)
+
+Your implementation must correctly handle which routes are public and which are protected, given that the application protects all routes by default.
+
+You may assume LoginDto and RegisterDto exist.
+
+Return complete, runnable code for the entire controller class, including all necessary decorators and imports. Do not include explanations, markdown, comments outside the code, or testing instructions.
+
+======================================================================
+MODELL: gpt-5.5  (GPT5)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 3
+  Tidsstämpel : 2026-04-17T17:47:25.704602
+  Tokens      : 150 in / 733 out
+──────────────────────────────────────────────────
+
+import { Body, Controller, Post, Req, SetMetadata } from '@nestjs/common';
+import { Request } from 'express';
+import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+
+export const IS_PUBLIC_KEY = 'isPublic';
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+
+type AuthenticatedRequest = Request & {
+  user: unknown;
+};
+
+@Controller('auth')
+export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Public()
+  @Post('login')
+  login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
+  }
+
+  @Public()
+  @Post('register')
+  register(@Body() registerDto: RegisterDto) {
+    return this.authService.register(registerDto);
+  }
+
+  @Post('logout')
+  logout(@Req() req: AuthenticatedRequest) {
+    return this.authService.logout(req.user);
+  }
+}
+
+──────────────────────────────────────────────────
+  KÖRNING 2 av 3
+  Tidsstämpel : 2026-04-17T17:47:37.693151
+  Tokens      : 150 in / 732 out
+──────────────────────────────────────────────────
+
+import { Body, Controller, Post, Req, SetMetadata } from '@nestjs/common';
+import { Request } from 'express';
+import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+
+export const IS_PUBLIC_KEY = 'isPublic';
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+
+interface AuthenticatedRequest extends Request {
+  user: unknown;
+}
+
+@Controller('auth')
+export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Public()
+  @Post('login')
+  login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
+  }
+
+  @Public()
+  @Post('register')
+  register(@Body() registerDto: RegisterDto) {
+    return this.authService.register(registerDto);
+  }
+
+  @Post('logout')
+  logout(@Req() req: AuthenticatedRequest) {
+    return this.authService.logout(req.user);
+  }
+}
+
+──────────────────────────────────────────────────
+  KÖRNING 3 av 3
+  Tidsstämpel : 2026-04-17T17:48:09.407319
+  Tokens      : 150 in / 1728 out
+──────────────────────────────────────────────────
+
+import { Body, Controller, HttpCode, HttpStatus, Post, SetMetadata } from '@nestjs/common';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+
+export const IS_PUBLIC_KEY = 'isPublic';
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+
+@Controller('auth')
+export class AuthController {
+  @Public()
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  login(@Body() loginDto: LoginDto) {
+    return loginDto;
+  }
+
+  @Public()
+  @Post('register')
+  register(@Body() registerDto: RegisterDto) {
+    return registerDto;
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  logout() {
+    return { success: true };
+  }
+}
+
+======================================================================
+MODELL: claude-sonnet-4-6  (Claude)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 3
+  Tidsstämpel : 2026-04-17T17:48:14.540845
+  Tokens      : 166 in / 276 out
+──────────────────────────────────────────────────
+
+```typescript
+import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
+import { SetMetadata } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+
+export const IS_PUBLIC_KEY = 'isPublic';
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+
+@Controller('auth')
+export class AuthController {
+  @Public()
+  @Post('login')
+  async login(@Body() loginDto: LoginDto) {
+    return { message: 'Login successful', data: loginDto };
+  }
+
+  @Public()
+  @Post('register')
+  async register(@Body() registerDto: RegisterDto) {
+    return { message: 'Registration successful', data: registerDto };
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('logout')
+  async logout(@Request() req: any) {
+    return { message: 'Logout successful', user: req.user };
+  }
+}
+```
+
+──────────────────────────────────────────────────
+  KÖRNING 2 av 3
+  Tidsstämpel : 2026-04-17T17:48:19.690481
+  Tokens      : 166 in / 276 out
+──────────────────────────────────────────────────
+
+```typescript
+import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
+import { SetMetadata } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+
+export const IS_PUBLIC_KEY = 'isPublic';
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+
+@Controller('auth')
+export class AuthController {
+  @Public()
+  @Post('login')
+  async login(@Body() loginDto: LoginDto) {
+    return { message: 'Login successful', data: loginDto };
+  }
+
+  @Public()
+  @Post('register')
+  async register(@Body() registerDto: RegisterDto) {
+    return { message: 'Registration successful', data: registerDto };
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('logout')
+  async logout(@Request() req: any) {
+    return { message: 'Logout successful', user: req.user };
+  }
+}
+```
+
+──────────────────────────────────────────────────
+  KÖRNING 3 av 3
+  Tidsstämpel : 2026-04-17T17:48:24.487311
+  Tokens      : 166 in / 263 out
+──────────────────────────────────────────────────
+
+```typescript
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { SetMetadata } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+
+export const IS_PUBLIC_KEY = 'isPublic';
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+
+@Controller('auth')
+export class AuthController {
+  @Public()
+  @Post('login')
+  async login(@Body() loginDto: LoginDto) {
+    return { message: 'Login successful', data: loginDto };
+  }
+
+  @Public()
+  @Post('register')
+  async register(@Body() registerDto: RegisterDto) {
+    return { message: 'Registration successful', data: registerDto };
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('logout')
+  async logout() {
+    return { message: 'Logout successful' };
+  }
+}
+```
+
+======================================================================
+SLUT PÅ TESTFALL
+======================================================================

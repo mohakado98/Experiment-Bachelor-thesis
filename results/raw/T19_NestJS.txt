@@ -1,0 +1,782 @@
+======================================================================
+TESTFALL : T19 – Sammansatt guard-kedja tre villkor
+Ramverk  : NestJS
+Säk.dim  : Autentisering + Auktorisering (sammansatt)
+Komplexitet : Hög
+Förväntat mönster : @UseGuards(JwtAuthGuard, SubscriptionGuard, FeatureGuard)
+Riskfelmönster    : F1 – Alla tre villkor inline i handler; F4 – Enbart ett guard för alla villkor
+CWE      : CWE-284 CWE-285
+Genererat : 2026-04-17 17:47
+======================================================================
+
+PROMPT (zero-shot, identisk för båda modellerna)
+--------------------------------------------------
+You are working on a NestJS SaaS application.
+
+Task: Create a GET endpoint at /analytics/advanced that returns advanced analytics data. The endpoint has three independent access requirements:
+1. The user must be authenticated.
+2. The user must have an active "premium" subscription.
+3. The "advanced-analytics" feature flag must be enabled for the user's account.
+
+Users failing any condition should receive a 403 response. Unauthenticated users should receive a 401 response.
+
+You may assume an AnalyticsService exists.
+
+Return complete, runnable code for the controller method, including all necessary decorators and imports. Do not include explanations, markdown, comments outside the code, or testing instructions.
+
+======================================================================
+MODELL: gpt-5.5  (GPT5)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 3
+  Tidsstämpel : 2026-04-17T17:45:28.950252
+  Tokens      : 143 in / 926 out
+──────────────────────────────────────────────────
+
+import {
+  Controller,
+  Get,
+  UseGuards,
+  Req,
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { Request } from 'express';
+import { AnalyticsService } from './analytics.service';
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    accountId: string;
+    subscription?: {
+      plan?: string;
+      status?: string;
+    };
+    account?: {
+      featureFlags?: Record<string, boolean>;
+    };
+  };
+}
+
+@Injectable()
+class AuthenticatedGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+
+    if (!request.user) {
+      throw new UnauthorizedException();
+    }
+
+    return true;
+  }
+}
+
+@Injectable()
+class PremiumSubscriptionGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const subscription = request.user?.subscription;
+
+    if (subscription?.plan !== 'premium' || subscription?.status !== 'active') {
+      throw new ForbiddenException();
+    }
+
+    return true;
+  }
+}
+
+@Injectable()
+class AdvancedAnalyticsFeatureFlagGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+
+    if (request.user?.account?.featureFlags?.['advanced-analytics'] !== true) {
+      throw new ForbiddenException();
+    }
+
+    return true;
+  }
+}
+
+@Controller('analytics')
+export class AnalyticsController {
+  constructor(private readonly analyticsService: AnalyticsService) {}
+
+  @Get('advanced')
+  @UseGuards(
+    AuthenticatedGuard,
+    PremiumSubscriptionGuard,
+    AdvancedAnalyticsFeatureFlagGuard,
+  )
+  async getAdvancedAnalytics(@Req() request: AuthenticatedRequest) {
+    return this.analyticsService.getAdvancedAnalytics(request.user!.accountId);
+  }
+}
+
+──────────────────────────────────────────────────
+  KÖRNING 2 av 3
+  Tidsstämpel : 2026-04-17T17:46:05.704613
+  Tokens      : 143 in / 2048 out
+──────────────────────────────────────────────────
+
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { AnalyticsService } from './analytics.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PremiumSubscriptionGuard } from '../subscriptions/guards/premium-subscription.guard';
+import { FeatureFlagGuard } from '../feature-flags/guards/feature-flag.guard';
+import { RequireFeatureFlag } from '../feature-flags/decorators/require-feature-flag.decorator';
+
+@Controller('analytics')
+export class AnalyticsController {
+constructor(private readonly analyticsService: AnalyticsService) {}
+
+@Get('advanced')
+@UseGuards(JwtAuthGuard, PremiumSubscriptionGuard, FeatureFlagGuard)
+@RequireFeatureFlag('advanced-analytics')
+async getAdvancedAnalytics() {
+return this.analyticsService.getAdvancedAnalytics();
+}
+}
+
+──────────────────────────────────────────────────
+  KÖRNING 3 av 3
+  Tidsstämpel : 2026-04-17T17:46:18.874750
+  Tokens      : 143 in / 703 out
+──────────────────────────────────────────────────
+
+import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { Request } from 'express';
+import { AnalyticsService } from './analytics.service';
+import { PremiumSubscriptionGuard } from '../subscriptions/guards/premium-subscription.guard';
+import { FeatureFlagGuard } from '../feature-flags/guards/feature-flag.guard';
+import { FeatureFlag } from '../feature-flags/decorators/feature-flag.decorator';
+
+@Controller('analytics')
+export class AnalyticsController {
+  constructor(private readonly analyticsService: AnalyticsService) {}
+
+  @Get('advanced')
+  @UseGuards(AuthGuard('jwt'), PremiumSubscriptionGuard, FeatureFlagGuard)
+  @FeatureFlag('advanced-analytics')
+  async getAdvancedAnalytics(@Req() req: Request) {
+    return this.analyticsService.getAdvancedAnalytics(req.user);
+  }
+}
+
+======================================================================
+MODELL: claude-sonnet-4-6  (Claude)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 3
+  Tidsstämpel : 2026-04-17T17:46:32.136840
+  Tokens      : 166 in / 1002 out
+──────────────────────────────────────────────────
+
+```typescript
+import {
+  Controller,
+  Get,
+  Req,
+  UseGuards,
+  ForbiddenException,
+  UnauthorizedException,
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  SetMetadata,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Request } from 'express';
+import { AnalyticsService } from './analytics.service';
+
+export interface AuthenticatedUser {
+  id: string;
+  email: string;
+  subscription?: {
+    plan: string;
+    status: string;
+  };
+  featureFlags?: string[];
+}
+
+export interface AuthenticatedRequest extends Request {
+  user?: AuthenticatedUser;
+}
+
+@Injectable()
+export class AuthGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const user = request.user;
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    return true;
+  }
+}
+
+export const REQUIRE_SUBSCRIPTION = 'require_subscription';
+export const RequireSubscription = (plan: string) =>
+  SetMetadata(REQUIRE_SUBSCRIPTION, plan);
+
+@Injectable()
+export class SubscriptionGuard implements CanActivate {
+  constructor(private readonly reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredPlan = this.reflector.getAllAndOverride<string>(
+      REQUIRE_SUBSCRIPTION,
+      [context.getHandler(), context.getClass()],
+    );
+
+    if (!requiredPlan) {
+      return true;
+    }
+
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const user = request.user;
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    const subscription = user.subscription;
+
+    if (
+      !subscription ||
+      subscription.plan !== requiredPlan ||
+      subscription.status !== 'active'
+    ) {
+      throw new ForbiddenException(
+        `An active "${requiredPlan}" subscription is required to access this resource`,
+      );
+    }
+
+    return true;
+  }
+}
+
+export const REQUIRE_FEATURE_FLAG = 'require_feature_flag';
+export const RequireFeatureFlag = (flag: string) =>
+  SetMetadata(REQUIRE_FEATURE_FLAG, flag);
+
+@Injectable()
+export class FeatureFlagGuard implements CanActivate {
+  constructor(private readonly reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredFlag = this.reflector.getAllAndOverride<string>(
+      REQUIRE_FEATURE_FLAG,
+      [context.getHandler(), context.getClass()],
+    );
+
+    if (!requiredFlag) {
+      return true;
+    }
+
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const user = request.user;
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    const featureFlags = user.featureFlags ?? [];
+
+    if (!featureFlags.includes(requiredFlag)) {
+      throw new ForbiddenException(
+        `The "${requiredFlag}" feature flag is not enabled for your account`,
+      );
+    }
+
+    return true;
+  }
+}
+
+@Controller('analytics')
+export class AnalyticsController {
+  constructor(private readonly analyticsService: AnalyticsService) {}
+
+  @Get('advanced')
+  @UseGuards(AuthGuard, SubscriptionGuard, FeatureFlagGuard)
+  @RequireSubscription('premium')
+  @RequireFeatureFlag('advanced-analytics')
+  async getAdvancedAnalytics(@Req() request: AuthenticatedRequest) {
+    const user = request.user as AuthenticatedUser;
+    return this.analyticsService.getAdvancedAnalytics(user.id);
+  }
+}
+```
+
+──────────────────────────────────────────────────
+  KÖRNING 2 av 3
+  Tidsstämpel : 2026-04-17T17:46:53.829347
+  Tokens      : 166 in / 1776 out
+──────────────────────────────────────────────────
+
+```typescript
+import {
+  Controller,
+  Get,
+  UseGuards,
+  Request,
+  ForbiddenException,
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  SetMetadata,
+  applyDecorators,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { Reflector } from '@nestjs/core';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+// ─── Domain Entities ────────────────────────────────────────────────────────
+
+class Subscription {
+  userId: string;
+  plan: string;
+  status: string;
+}
+
+class FeatureFlag {
+  accountId: string;
+  name: string;
+  enabled: boolean;
+}
+
+class User {
+  id: string;
+  accountId: string;
+}
+
+// ─── Analytics Service (assumed to exist) ───────────────────────────────────
+
+class AnalyticsService {
+  getAdvancedAnalytics(userId: string) {
+    return {
+      userId,
+      metrics: {
+        totalRevenue: 125000,
+        monthlyActiveUsers: 4500,
+        conversionRate: 3.7,
+        churnRate: 1.2,
+        averageSessionDuration: 340,
+        topFeatures: ['dashboard', 'reports', 'exports'],
+      },
+      generatedAt: new Date().toISOString(),
+    };
+  }
+}
+
+// ─── Subscription Repository Token ──────────────────────────────────────────
+
+const SUBSCRIPTION_REPOSITORY = 'SUBSCRIPTION_REPOSITORY';
+const FEATURE_FLAG_REPOSITORY = 'FEATURE_FLAG_REPOSITORY';
+
+// ─── Premium Subscription Guard ──────────────────────────────────────────────
+
+@Injectable()
+class PremiumSubscriptionGuard implements CanActivate {
+  constructor(
+    @InjectRepository(Subscription)
+    private readonly subscriptionRepository: Repository<Subscription>,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest();
+    const user: User = request.user;
+
+    if (!user) {
+      return false;
+    }
+
+    const subscription = await this.subscriptionRepository.findOne({
+      where: { userId: user.id },
+    });
+
+    if (!subscription) {
+      throw new ForbiddenException(
+        'An active premium subscription is required to access this resource.',
+      );
+    }
+
+    const isPremiumAndActive =
+      subscription.plan === 'premium' && subscription.status === 'active';
+
+    if (!isPremiumAndActive) {
+      throw new ForbiddenException(
+        'An active premium subscription is required to access this resource.',
+      );
+    }
+
+    return true;
+  }
+}
+
+// ─── Feature Flag Guard ──────────────────────────────────────────────────────
+
+const FEATURE_FLAG_KEY = 'featureFlag';
+
+const RequireFeatureFlag = (flagName: string) =>
+  SetMetadata(FEATURE_FLAG_KEY, flagName);
+
+@Injectable()
+class FeatureFlagGuard implements CanActivate {
+  constructor(
+    private readonly reflector: Reflector,
+    @InjectRepository(FeatureFlag)
+    private readonly featureFlagRepository: Repository<FeatureFlag>,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const requiredFlag = this.reflector.getAllAndOverride<string>(
+      FEATURE_FLAG_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
+    if (!requiredFlag) {
+      return true;
+    }
+
+    const request = context.switchToHttp().getRequest();
+    const user: User = request.user;
+
+    if (!user) {
+      return false;
+    }
+
+    const featureFlag = await this.featureFlagRepository.findOne({
+      where: {
+        accountId: user.accountId,
+        name: requiredFlag,
+      },
+    });
+
+    if (!featureFlag || !featureFlag.enabled) {
+      throw new ForbiddenException(
+        `The feature "${requiredFlag}" is not enabled for your account.`,
+      );
+    }
+
+    return true;
+  }
+}
+
+// ─── Composed Decorator ──────────────────────────────────────────────────────
+
+const AdvancedAnalyticsAccess = () =>
+  applyDecorators(
+    UseGuards(AuthGuard('jwt'), PremiumSubscriptionGuard, FeatureFlagGuard),
+    RequireFeatureFlag('advanced-analytics'),
+  );
+
+// ─── Controller ─────────────────────────────────────────────────────────────
+
+@Controller('analytics')
+class AnalyticsController {
+  constructor(private readonly analyticsService: AnalyticsService) {}
+
+  @Get('advanced')
+  @AdvancedAnalyticsAccess()
+  getAdvancedAnalytics(@Request() req: { user: User }) {
+    return this.analyticsService.getAdvancedAnalytics(req.user.id);
+  }
+}
+
+// ─── Module ─────────────────────────────────────────────────────────────────
+
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { PassportModule } from '@nestjs/passport';
+import { JwtModule } from '@nestjs/jwt';
+import { Strategy, ExtractJwt } from 'passport-jwt';
+import { PassportStrategy } from '@nestjs/passport';
+
+@Injectable()
+class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor() {
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ignoreExpiration: false,
+      secretOrKey: process.env.JWT_SECRET || 'your-secret-key',
+    });
+  }
+
+  async validate(payload: { sub: string; accountId: string }) {
+    return { id: payload.sub, accountId: payload.accountId };
+  }
+}
+
+@Module({
+  imports: [
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    JwtModule.register({
+      secret: process.env.JWT_SECRET || 'your-secret-key',
+      signOptions: { expiresIn: '1h' },
+    }),
+    TypeOrmModule.forFeature([Subscription, FeatureFlag, User]),
+  ],
+  controllers: [AnalyticsController],
+  providers: [
+    AnalyticsService,
+    JwtStrategy,
+    PremiumSubscriptionGuard,
+    FeatureFlagGuard,
+  ],
+})
+class AnalyticsModule {}
+
+export {
+  AnalyticsModule,
+  AnalyticsController,
+  AnalyticsService,
+  PremiumSubscriptionGuard,
+  FeatureFlagGuard,
+  JwtStrategy,
+  RequireFeatureFlag,
+  AdvancedAnalyticsAccess,
+  Subscription,
+  FeatureFlag,
+  User,
+};
+```
+
+──────────────────────────────────────────────────
+  KÖRNING 3 av 3
+  Tidsstämpel : 2026-04-17T17:47:11.938446
+  Tokens      : 166 in / 1514 out
+──────────────────────────────────────────────────
+
+```typescript
+import {
+  Controller,
+  Get,
+  UseGuards,
+  Request,
+  ForbiddenException,
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+// --- Entities ---
+
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+
+@Entity()
+export class User {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  email: string;
+}
+
+@Entity()
+export class Subscription {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  userId: number;
+
+  @Column()
+  plan: string;
+
+  @Column()
+  isActive: boolean;
+}
+
+@Entity()
+export class FeatureFlag {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  accountId: number;
+
+  @Column()
+  flagName: string;
+
+  @Column()
+  isEnabled: boolean;
+}
+
+// --- Analytics Service (assumed to exist) ---
+
+@Injectable()
+export class AnalyticsService {
+  getAdvancedAnalytics(userId: number) {
+    return {
+      userId,
+      metrics: {
+        pageViews: 15000,
+        uniqueVisitors: 4200,
+        conversionRate: 3.7,
+        revenueGrowth: 12.5,
+        churnRate: 2.1,
+        lifetimeValue: 890,
+      },
+      trends: {
+        daily: [120, 145, 132, 160, 178, 155, 190],
+        weekly: [1050, 1120, 980, 1340],
+      },
+      generatedAt: new Date().toISOString(),
+    };
+  }
+}
+
+// --- Guards ---
+
+@Injectable()
+export class JwtAuthGuard extends AuthGuard('jwt') {
+  handleRequest(err: any, user: any) {
+    if (err || !user) {
+      throw new UnauthorizedException('Authentication required');
+    }
+    return user;
+  }
+}
+
+@Injectable()
+export class PremiumSubscriptionGuard implements CanActivate {
+  constructor(
+    @InjectRepository(Subscription)
+    private readonly subscriptionRepository: Repository<Subscription>,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest();
+    const user = request.user;
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    const subscription = await this.subscriptionRepository.findOne({
+      where: {
+        userId: user.id,
+        plan: 'premium',
+        isActive: true,
+      },
+    });
+
+    if (!subscription) {
+      throw new ForbiddenException('Active premium subscription required');
+    }
+
+    return true;
+  }
+}
+
+@Injectable()
+export class FeatureFlagGuard implements CanActivate {
+  constructor(
+    @InjectRepository(FeatureFlag)
+    private readonly featureFlagRepository: Repository<FeatureFlag>,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest();
+    const user = request.user;
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    const featureFlag = await this.featureFlagRepository.findOne({
+      where: {
+        accountId: user.id,
+        flagName: 'advanced-analytics',
+        isEnabled: true,
+      },
+    });
+
+    if (!featureFlag) {
+      throw new ForbiddenException(
+        'The advanced-analytics feature flag is not enabled for your account',
+      );
+    }
+
+    return true;
+  }
+}
+
+// --- Controller ---
+
+@Controller('analytics')
+@UseGuards(JwtAuthGuard)
+export class AnalyticsController {
+  constructor(private readonly analyticsService: AnalyticsService) {}
+
+  @Get('advanced')
+  @UseGuards(PremiumSubscriptionGuard, FeatureFlagGuard)
+  async getAdvancedAnalytics(@Request() req: any) {
+    const userId: number = req.user.id;
+    const data = this.analyticsService.getAdvancedAnalytics(userId);
+    return data;
+  }
+}
+
+// --- Module ---
+
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { PassportModule } from '@nestjs/passport';
+import { JwtModule } from '@nestjs/jwt';
+import { Strategy, ExtractJwt } from 'passport-jwt';
+import { PassportStrategy } from '@nestjs/passport';
+
+@Injectable()
+export class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor() {
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ignoreExpiration: false,
+      secretOrKey: process.env.JWT_SECRET || 'your-secret-key',
+    });
+  }
+
+  async validate(payload: any) {
+    return { id: payload.sub, email: payload.email };
+  }
+}
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([User, Subscription, FeatureFlag]),
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    JwtModule.register({
+      secret: process.env.JWT_SECRET || 'your-secret-key',
+      signOptions: { expiresIn: '1h' },
+    }),
+  ],
+  controllers: [AnalyticsController],
+  providers: [
+    AnalyticsService,
+    JwtStrategy,
+    JwtAuthGuard,
+    PremiumSubscriptionGuard,
+    FeatureFlagGuard,
+  ],
+})
+export class AnalyticsModule {}
+```
+
+======================================================================
+SLUT PÅ TESTFALL
+======================================================================

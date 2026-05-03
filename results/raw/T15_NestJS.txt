@@ -1,0 +1,233 @@
+======================================================================
+TESTFALL : T15 – API-nyckelautentisering
+Ramverk  : NestJS
+Säk.dim  : Autentisering (API-nyckel)
+Komplexitet : Medel
+Förväntat mönster : @UseGuards(ApiKeyGuard) på controller-metod
+Riskfelmönster    : F1 – Inline header-läsning och nyckelvalidering i handler
+CWE      : CWE-284
+Genererat : 2026-04-17 17:41
+======================================================================
+
+PROMPT (zero-shot, identisk för båda modellerna)
+--------------------------------------------------
+You are working on a NestJS application that exposes a webhook integration endpoint.
+
+Task: Create a POST endpoint at /integrations/webhook that receives external event payloads. The endpoint should only be accessible to clients that provide a valid API key in the X-API-Key request header. Requests with a missing or invalid key should receive a 401 response.
+
+You may assume a WebhookPayloadDto exists.
+
+Return complete, runnable code for the controller method, including all necessary decorators and imports. Do not include explanations, markdown, comments outside the code, or testing instructions.
+
+======================================================================
+MODELL: gpt-5.5  (GPT5)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 3
+  Tidsstämpel : 2026-04-17T17:40:27.901279
+  Tokens      : 120 in / 671 out
+──────────────────────────────────────────────────
+
+import {
+  Body,
+  Controller,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { WebhookPayloadDto } from './dto/webhook-payload.dto';
+
+@Controller('integrations')
+export class IntegrationsController {
+  @Post('webhook')
+  @HttpCode(HttpStatus.OK)
+  async receiveWebhook(
+    @Headers('x-api-key') apiKey: string | undefined,
+    @Body() payload: WebhookPayloadDto,
+  ): Promise<{ received: true }> {
+    if (!apiKey || apiKey !== process.env.WEBHOOK_API_KEY) {
+      throw new UnauthorizedException();
+    }
+
+    return { received: true };
+  }
+}
+
+──────────────────────────────────────────────────
+  KÖRNING 2 av 3
+  Tidsstämpel : 2026-04-17T17:40:40.369479
+  Tokens      : 120 in / 669 out
+──────────────────────────────────────────────────
+
+import {
+  Body,
+  Controller,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { WebhookPayloadDto } from './dto/webhook-payload.dto';
+
+@Controller('integrations')
+export class IntegrationsController {
+  @Post('webhook')
+  @HttpCode(HttpStatus.OK)
+  async receiveWebhook(
+    @Body() payload: WebhookPayloadDto,
+    @Headers('x-api-key') apiKey?: string,
+  ): Promise<{ received: boolean }> {
+    if (!apiKey || apiKey !== process.env.WEBHOOK_API_KEY) {
+      throw new UnauthorizedException();
+    }
+
+    return { received: true };
+  }
+}
+
+──────────────────────────────────────────────────
+  KÖRNING 3 av 3
+  Tidsstämpel : 2026-04-17T17:40:48.360445
+  Tokens      : 120 in / 325 out
+──────────────────────────────────────────────────
+
+import { Body, Controller, Headers, Post, UnauthorizedException } from '@nestjs/common';
+import { WebhookPayloadDto } from './dto/webhook-payload.dto';
+
+@Controller('integrations')
+export class IntegrationsController {
+  @Post('webhook')
+  async receiveWebhook(
+    @Headers('x-api-key') apiKey: string | undefined,
+    @Body() payload: WebhookPayloadDto,
+  ): Promise<{ success: boolean }> {
+    if (!apiKey || apiKey !== process.env.WEBHOOK_API_KEY) {
+      throw new UnauthorizedException();
+    }
+
+    return { success: true };
+  }
+}
+
+======================================================================
+MODELL: claude-sonnet-4-6  (Claude)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 3
+  Tidsstämpel : 2026-04-17T17:40:53.441538
+  Tokens      : 135 in / 219 out
+──────────────────────────────────────────────────
+
+```typescript
+import {
+  Controller,
+  Post,
+  Body,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { WebhookPayloadDto } from './dto/webhook-payload.dto';
+
+@Controller('integrations')
+export class IntegrationsController {
+  private readonly validApiKey = process.env.WEBHOOK_API_KEY;
+
+  @Post('webhook')
+  @HttpCode(HttpStatus.OK)
+  handleWebhook(
+    @Headers('x-api-key') apiKey: string,
+    @Body() payload: WebhookPayloadDto,
+  ): { received: boolean } {
+    if (!apiKey || apiKey !== this.validApiKey) {
+      throw new UnauthorizedException('Invalid or missing API key');
+    }
+
+    return { received: true };
+  }
+}
+```
+
+──────────────────────────────────────────────────
+  KÖRNING 2 av 3
+  Tidsstämpel : 2026-04-17T17:40:58.518432
+  Tokens      : 135 in / 229 out
+──────────────────────────────────────────────────
+
+```typescript
+import {
+  Controller,
+  Post,
+  Body,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { WebhookPayloadDto } from './dto/webhook-payload.dto';
+
+const VALID_API_KEY = process.env.WEBHOOK_API_KEY ?? 'default-secret-key';
+
+@Controller('integrations')
+export class IntegrationsController {
+  @Post('webhook')
+  @HttpCode(HttpStatus.OK)
+  handleWebhook(
+    @Headers('x-api-key') apiKey: string,
+    @Body() payload: WebhookPayloadDto,
+  ): { received: boolean } {
+    if (!apiKey || apiKey !== VALID_API_KEY) {
+      throw new UnauthorizedException('Invalid or missing API key');
+    }
+
+    return { received: true };
+  }
+}
+```
+
+──────────────────────────────────────────────────
+  KÖRNING 3 av 3
+  Tidsstämpel : 2026-04-17T17:41:03.747088
+  Tokens      : 135 in / 229 out
+──────────────────────────────────────────────────
+
+```typescript
+import {
+  Controller,
+  Post,
+  Body,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { WebhookPayloadDto } from './dto/webhook-payload.dto';
+
+const VALID_API_KEY = process.env.WEBHOOK_API_KEY ?? 'default-secret-key';
+
+@Controller('integrations')
+export class IntegrationsController {
+  @Post('webhook')
+  @HttpCode(HttpStatus.OK)
+  handleWebhook(
+    @Headers('x-api-key') apiKey: string,
+    @Body() payload: WebhookPayloadDto,
+  ): { received: boolean } {
+    if (!apiKey || apiKey !== VALID_API_KEY) {
+      throw new UnauthorizedException('Invalid or missing API key');
+    }
+
+    return { received: true };
+  }
+}
+```
+
+======================================================================
+SLUT PÅ TESTFALL
+======================================================================

@@ -1,0 +1,326 @@
+======================================================================
+TESTFALL : T16 – Resursägarskydd
+Ramverk  : NestJS
+Säk.dim  : Auktorisering (ägarskap)
+Komplexitet : Medel
+Förväntat mönster : @UseGuards(JwtAuthGuard, OwnershipGuard) på controller-metod
+Riskfelmönster    : F1 – Inline user.id-jämförelse i handler; F4 – Guard utan korrekt ägarskapslogik
+CWE      : CWE-285
+Genererat : 2026-04-17 17:42
+======================================================================
+
+PROMPT (zero-shot, identisk för båda modellerna)
+--------------------------------------------------
+You are working on a NestJS document management application.
+
+Task: Create a GET endpoint at /documents/:documentId that returns a specific document. The endpoint must ensure that a user can only access their own documents. An authenticated user attempting to access another user's document should receive a 403 response. Unauthenticated users should receive a 401 response.
+
+You may assume a Document entity and a DocumentService with a findById(id: string) method exist.
+
+Return complete, runnable code for the controller method, including all necessary decorators and imports. Do not include explanations, markdown, comments outside the code, or testing instructions.
+
+======================================================================
+MODELL: gpt-5.5  (GPT5)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 3
+  Tidsstämpel : 2026-04-17T17:41:17.718718
+  Tokens      : 130 in / 761 out
+──────────────────────────────────────────────────
+
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  NotFoundException,
+  Param,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { Request } from 'express';
+import { DocumentService } from './document.service';
+import { Document } from './document.entity';
+
+type AuthenticatedRequest = Request & {
+  user: {
+    id: string;
+  };
+};
+
+@Controller('documents')
+export class DocumentController {
+  constructor(private readonly documentService: DocumentService) {}
+
+  @Get(':documentId')
+  @UseGuards(AuthGuard('jwt'))
+  async getDocument(
+    @Param('documentId') documentId: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<Document> {
+    const document = await this.documentService.findById(documentId);
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    if ((document as Document & { userId: string }).userId !== req.user.id) {
+      throw new ForbiddenException('You do not have access to this document');
+    }
+
+    return document;
+  }
+}
+
+──────────────────────────────────────────────────
+  KÖRNING 2 av 3
+  Tidsstämpel : 2026-04-17T17:41:37.715040
+  Tokens      : 130 in / 1201 out
+──────────────────────────────────────────────────
+
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  NotFoundException,
+  Param,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { Request } from 'express';
+import { DocumentService } from './document.service';
+import { Document } from './document.entity';
+
+type AuthenticatedRequest = Request & {
+  user: {
+    id?: string;
+    userId?: string;
+    sub?: string;
+  };
+};
+
+@Controller('documents')
+export class DocumentController {
+  constructor(private readonly documentService: DocumentService) {}
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get(':documentId')
+  async findById(
+    @Param('documentId') documentId: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<Document> {
+    const document = await this.documentService.findById(documentId);
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    const authenticatedUserId = req.user.id ?? req.user.userId ?? req.user.sub;
+
+    const documentOwnerId =
+      (document as any).userId ??
+      (document as any).ownerId ??
+      (document as any).user?.id ??
+      (document as any).owner?.id;
+
+    if (!authenticatedUserId || String(documentOwnerId) !== String(authenticatedUserId)) {
+      throw new ForbiddenException();
+    }
+
+    return document;
+  }
+}
+
+──────────────────────────────────────────────────
+  KÖRNING 3 av 3
+  Tidsstämpel : 2026-04-17T17:42:01.894643
+  Tokens      : 130 in / 1312 out
+──────────────────────────────────────────────────
+
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  NotFoundException,
+  Param,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { Request } from 'express';
+import { DocumentService } from './document.service';
+import { Document } from './document.entity';
+
+type AuthenticatedRequest = Request & {
+  user: {
+    id?: string;
+    sub?: string;
+    userId?: string;
+  };
+};
+
+@Controller('documents')
+export class DocumentController {
+  constructor(private readonly documentService: DocumentService) {}
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get(':documentId')
+  async findById(
+    @Param('documentId') documentId: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<Document> {
+    const document = await this.documentService.findById(documentId);
+
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    const authenticatedUserId = req.user.id ?? req.user.userId ?? req.user.sub;
+    const documentOwnerId = (document as Document & { userId: string }).userId;
+
+    if (documentOwnerId !== authenticatedUserId) {
+      throw new ForbiddenException();
+    }
+
+    return document;
+  }
+}
+
+======================================================================
+MODELL: claude-sonnet-4-6  (Claude)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 3
+  Tidsstämpel : 2026-04-17T17:42:06.767389
+  Tokens      : 145 in / 248 out
+──────────────────────────────────────────────────
+
+```typescript
+import {
+  Controller,
+  Get,
+  Param,
+  UseGuards,
+  Request,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { DocumentService } from './document.service';
+
+@Controller('documents')
+@UseGuards(AuthGuard('jwt'))
+export class DocumentController {
+  constructor(private readonly documentService: DocumentService) {}
+
+  @Get(':documentId')
+  async getDocument(@Param('documentId') documentId: string, @Request() req) {
+    const document = await this.documentService.findById(documentId);
+
+    if (!document) {
+      throw new NotFoundException(`Document with id ${documentId} not found`);
+    }
+
+    if (document.userId !== req.user.id) {
+      throw new ForbiddenException(
+        'You do not have permission to access this document',
+      );
+    }
+
+    return document;
+  }
+}
+```
+
+──────────────────────────────────────────────────
+  KÖRNING 2 av 3
+  Tidsstämpel : 2026-04-17T17:42:11.895280
+  Tokens      : 145 in / 249 out
+──────────────────────────────────────────────────
+
+```typescript
+import {
+  Controller,
+  Get,
+  Param,
+  UseGuards,
+  Request,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { DocumentService } from './document.service';
+
+@Controller('documents')
+export class DocumentController {
+  constructor(private readonly documentService: DocumentService) {}
+
+  @Get(':documentId')
+  @UseGuards(AuthGuard('jwt'))
+  async getDocument(@Param('documentId') documentId: string, @Request() req) {
+    const document = await this.documentService.findById(documentId);
+
+    if (!document) {
+      throw new NotFoundException(`Document with id ${documentId} not found`);
+    }
+
+    if (document.userId !== req.user.id) {
+      throw new ForbiddenException(
+        'You do not have permission to access this document',
+      );
+    }
+
+    return document;
+  }
+}
+```
+
+──────────────────────────────────────────────────
+  KÖRNING 3 av 3
+  Tidsstämpel : 2026-04-17T17:42:17.100665
+  Tokens      : 145 in / 249 out
+──────────────────────────────────────────────────
+
+```typescript
+import {
+  Controller,
+  Get,
+  Param,
+  UseGuards,
+  Request,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { DocumentService } from './document.service';
+
+@Controller('documents')
+export class DocumentController {
+  constructor(private readonly documentService: DocumentService) {}
+
+  @Get(':documentId')
+  @UseGuards(AuthGuard('jwt'))
+  async getDocument(@Param('documentId') documentId: string, @Request() req) {
+    const document = await this.documentService.findById(documentId);
+
+    if (!document) {
+      throw new NotFoundException(`Document with id ${documentId} not found`);
+    }
+
+    if (document.userId !== req.user.id) {
+      throw new ForbiddenException(
+        'You do not have permission to access this document',
+      );
+    }
+
+    return document;
+  }
+}
+```
+
+======================================================================
+SLUT PÅ TESTFALL
+======================================================================

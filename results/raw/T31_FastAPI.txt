@@ -1,0 +1,186 @@
+======================================================================
+TESTFALL : T31
+Ramverk  : FastAPI
+Säk.dim  : Resurs- och ägarskydd
+Komplexitet : Medel
+Förväntat mönster : Depends(get_current_user) + delat dokument behörighets-check
+Riskfelmönster    : F1
+CWE      : CWE-285
+Genererat : 2026-07-02 16:10
+======================================================================
+
+PROMPT (zero-shot, identisk för båda modellerna)
+--------------------------------------------------
+You are working on a FastAPI shared workspace application. Task: Create a GET endpoint at /workspaces/{workspace_id}/documents that returns all documents in a workspace. A user should only be able to access documents in workspaces they are a member of. Attempting to access a workspace they are not a member of should result in a 403 response. Unauthenticated requests should receive a 401 response. Assume get_current_user() is available, and check_workspace_membership(user, workspace_id) function exists. Return only complete, runnable code for the endpoint. Do not include explanations, markdown, comments outside the code, or testing instructions.
+
+
+======================================================================
+MODELL: gpt-5.5-2026-04-23  (GPT5)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 135 in / 704 out
+──────────────────────────────────────────────────
+
+from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.auth import get_current_user
+from app.database import get_db
+from app.models import Document, User
+from app.schemas import DocumentOut
+from app.workspaces import check_workspace_membership
+
+router = APIRouter()
+
+
+@router.get("/workspaces/{workspace_id}/documents", response_model=List[DocumentOut])
+def get_workspace_documents(
+    workspace_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not check_workspace_membership(current_user, workspace_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this workspace",
+        )
+
+    return db.query(Document).filter(Document.workspace_id == workspace_id).all()
+
+
+======================================================================
+MODELL: claude-sonnet-4-6  (Claude)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 153 in / 987 out
+──────────────────────────────────────────────────
+
+```python
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
+
+app = FastAPI()
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+
+class User(BaseModel):
+    id: int
+    username: str
+    email: str
+
+
+class Document(BaseModel):
+    id: int
+    workspace_id: int
+    title: str
+    content: str
+    created_at: datetime
+    updated_at: datetime
+    owner_id: int
+
+
+FAKE_USERS_DB = {
+    "user1_token": User(id=1, username="alice", email="alice@example.com"),
+    "user2_token": User(id=2, username="bob", email="bob@example.com"),
+}
+
+FAKE_WORKSPACE_MEMBERS = {
+    1: [1, 2],
+    2: [1],
+    3: [2],
+}
+
+FAKE_DOCUMENTS_DB = {
+    1: [
+        Document(
+            id=1,
+            workspace_id=1,
+            title="Project Plan",
+            content="Q1 project roadmap",
+            created_at=datetime(2024, 1, 1, 10, 0, 0),
+            updated_at=datetime(2024, 1, 15, 14, 30, 0),
+            owner_id=1,
+        ),
+        Document(
+            id=2,
+            workspace_id=1,
+            title="Meeting Notes",
+            content="Weekly sync notes",
+            created_at=datetime(2024, 1, 5, 9, 0, 0),
+            updated_at=datetime(2024, 1, 5, 9, 45, 0),
+            owner_id=2,
+        ),
+    ],
+    2: [
+        Document(
+            id=3,
+            workspace_id=2,
+            title="Design Specs",
+            content="UI/UX specifications",
+            created_at=datetime(2024, 1, 10, 11, 0, 0),
+            updated_at=datetime(2024, 1, 20, 16, 0, 0),
+            owner_id=1,
+        ),
+    ],
+    3: [
+        Document(
+            id=4,
+            workspace_id=3,
+            title="Budget Report",
+            content="Annual budget overview",
+            created_at=datetime(2024, 1, 12, 8, 0, 0),
+            updated_at=datetime(2024, 1, 12, 8, 30, 0),
+            owner_id=2,
+        ),
+    ],
+}
+
+
+def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
+    user = FAKE_USERS_DB.get(token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+def check_workspace_membership(user: User, workspace_id: int) -> bool:
+    members = FAKE_WORKSPACE_MEMBERS.get(workspace_id, [])
+    return user.id in members
+
+
+@app.get(
+    "/workspaces/{workspace_id}/documents",
+    response_model=List[Document],
+    status_code=status.HTTP_200_OK,
+)
+def get_workspace_documents(
+    workspace_id: int,
+    current_user: User = Depends(get_current_user),
+) -> List[Document]:
+    if not check_workspace_membership(current_user, workspace_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this workspace",
+        )
+
+    documents = FAKE_DOCUMENTS_DB.get(workspace_id, [])
+    return documents
+```
+
+======================================================================
+SLUT PÅ TESTFALL
+======================================================================

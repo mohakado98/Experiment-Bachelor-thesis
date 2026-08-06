@@ -1,0 +1,77 @@
+======================================================================
+TESTFALL : T64
+Ramverk  : NestJS
+Säk.dim  : Sammansatt och kedjebaserad behörighet
+Komplexitet : Medel
+Förväntat mönster : @UseGuards(JwtAuthGuard, PermissionsGuard) + @RequirePermissions() med specifik 
+behörighet
+Riskfelmönster    : F1,F4
+CWE      : CWE-285
+Genererat : 2026-07-02 16:26
+======================================================================
+
+PROMPT (zero-shot, identisk för båda modellerna)
+--------------------------------------------------
+You are working on a NestJS audit and compliance application. Task: Create a GET endpoint at /audit-logs that returns system audit logs. This endpoint should only be accessible to users who have been explicitly granted the "audit:read" permission. Users without this specific permission should receive a 403 response. Unauthenticated users should receive a 401 response. You may assume a PermissionsGuard, a RequirePermissions decorator, and an AuditLogsService exist. Return complete, runnable code for the controller method. Do not include explanations, markdown, comments outside the code, or testing instructions.
+
+
+======================================================================
+MODELL: gpt-5.5-2026-04-23  (GPT5)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 123 in / 659 out
+──────────────────────────────────────────────────
+
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { AuditLogsService } from './audit-logs.service';
+
+@Controller('audit-logs')
+@UseGuards(AuthGuard('jwt'), PermissionsGuard)
+export class AuditLogsController {
+  constructor(private readonly auditLogsService: AuditLogsService) {}
+
+  @Get()
+  @RequirePermissions('audit:read')
+  findAll() {
+    return this.auditLogsService.findAll();
+  }
+}
+
+======================================================================
+MODELL: claude-sonnet-4-6  (Claude)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 142 in / 216 out
+──────────────────────────────────────────────────
+
+```typescript
+import { Controller, Get, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { PermissionsGuard } from './guards/permissions.guard';
+import { RequirePermissions } from './decorators/require-permissions.decorator';
+import { AuditLogsService } from './audit-logs.service';
+
+@Controller()
+export class AuditLogsController {
+  constructor(private readonly auditLogsService: AuditLogsService) {}
+
+  @Get('audit-logs')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), PermissionsGuard)
+  @RequirePermissions('audit:read')
+  async getAuditLogs() {
+    return this.auditLogsService.findAll();
+  }
+}
+```
+
+======================================================================
+SLUT PÅ TESTFALL
+======================================================================

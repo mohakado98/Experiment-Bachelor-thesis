@@ -1,0 +1,236 @@
+======================================================================
+TESTFALL : T40
+Ramverk  : FastAPI
+Säk.dim  : Sammansatt och kedjebaserad behörighet
+Komplexitet : Hög
+Förväntat mönster : Zero-trust mönster: varje villkor i separat Depends med tydlig felhantering
+Riskfelmönster    : F1,F4
+CWE      : CWE-284,CWE-285
+Genererat : 2026-07-02 16:17
+======================================================================
+
+PROMPT (zero-shot, identisk för båda modellerna)
+--------------------------------------------------
+You are working on a FastAPI privileged operations service that follows a zero- trust security model. Task: Create a POST endpoint at /privileged/execute that executes a sensitive administrative action. The endpoint must enforce zero-trust principles with four independent verification steps:
+1. The user must be authenticated with a valid, non-expired session token.
+2. The user must have the "privileged_operator" role.
+3. The operation payload must be approved (have an approval_token that can be
+verified independently).
+4. The request must originate from a trusted IP range (verifiable via a request
+header). Each condition must be checked independently. Any failure returns 403 with a specific error code indicating which check failed. Assume verify_session(token), require_privileged_role(), verify_approval_token(token), and verify_trusted_ip(ip) functions exist. Assume PrivilegedAction Pydantic model exists. Return only complete, runnable code for the endpoint. Do not include explanations, markdown, comments outside the code, or testing instructions.
+
+
+======================================================================
+MODELL: gpt-5.5-2026-04-23  (GPT5)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 213 in / 3655 out
+──────────────────────────────────────────────────
+
+from typing import Optional
+
+from fastapi import FastAPI, Header, HTTPException, status
+
+app = FastAPI()
+
+
+def _extract_bearer_token(authorization: Optional[str]) -> Optional[str]:
+    if not authorization:
+        return None
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer":
+        return None
+    token = token.strip()
+    return token or None
+
+
+def _extract_forwarded_ip(x_forwarded_for: Optional[str]) -> Optional[str]:
+    if not x_forwarded_for:
+        return None
+    ip = x_forwarded_for.split(",", 1)[0].strip()
+    return ip or None
+
+
+def _safe_verify(fn, *args) -> bool:
+    try:
+        return bool(fn(*args))
+    except Exception:
+        return False
+
+
+def _safe_require(fn, *args) -> bool:
+    try:
+        result = fn(*args)
+        return result is not False
+    except Exception:
+        return False
+
+
+@app.post("/privileged/execute")
+def execute_privileged_action(
+    action: PrivilegedAction,
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    x_forwarded_for: Optional[str] = Header(default=None, alias="X-Forwarded-For"),
+):
+    session_token = _extract_bearer_token(authorization)
+    trusted_ip = _extract_forwarded_ip(x_forwarded_for)
+    approval_token = getattr(action, "approval_token", None)
+
+    session_valid = _safe_verify(verify_session, session_token) if session_token else False
+    role_valid = _safe_require(require_privileged_role)
+    approval_valid = _safe_verify(verify_approval_token, approval_token) if approval_token else False
+    trusted_ip_valid = _safe_verify(verify_trusted_ip, trusted_ip) if trusted_ip else False
+
+    if not session_valid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error_code": "SESSION_TOKEN_INVALID_OR_EXPIRED"},
+        )
+
+    if not role_valid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error_code": "PRIVILEGED_OPERATOR_ROLE_REQUIRED"},
+        )
+
+    if not approval_valid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error_code": "APPROVAL_TOKEN_INVALID"},
+        )
+
+    if not trusted_ip_valid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error_code": "UNTRUSTED_IP_RANGE"},
+        )
+
+    return {"status": "executed"}
+
+======================================================================
+MODELL: claude-sonnet-4-6  (Claude)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 239 in / 835 out
+──────────────────────────────────────────────────
+
+```python
+from fastapi import FastAPI, Depends, Header, HTTPException, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
+from typing import Optional
+
+app = FastAPI()
+
+security = HTTPBearer()
+
+
+class PrivilegedAction(BaseModel):
+    action: str
+    parameters: dict
+    approval_token: str
+
+
+def verify_session(token: str) -> bool:
+    return token is not None and len(token) > 0
+
+
+def require_privileged_role() -> bool:
+    return True
+
+
+def verify_approval_token(token: str) -> bool:
+    return token is not None and len(token) > 0
+
+
+def verify_trusted_ip(ip: str) -> bool:
+    trusted_ranges = ["10.", "192.168.", "172.16.", "127."]
+    return any(ip.startswith(prefix) for prefix in trusted_ranges)
+
+
+async def get_session_token(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> str:
+    return credentials.credentials
+
+
+@app.post("/privileged/execute")
+async def execute_privileged_action(
+    request: Request,
+    payload: PrivilegedAction,
+    token: str = Depends(get_session_token),
+    x_forwarded_for: Optional[str] = Header(None),
+    x_real_ip: Optional[str] = Header(None),
+):
+    if not verify_session(token):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "AUTH_001",
+                "message": "Invalid or expired session token",
+                "check_failed": "session_verification",
+            },
+        )
+
+    if not require_privileged_role():
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "AUTH_002",
+                "message": "User does not have the required privileged_operator role",
+                "check_failed": "role_verification",
+            },
+        )
+
+    if not verify_approval_token(payload.approval_token):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "AUTH_003",
+                "message": "Operation payload approval token is invalid or not approved",
+                "check_failed": "approval_token_verification",
+            },
+        )
+
+    client_ip = (
+        x_forwarded_for.split(",")[0].strip()
+        if x_forwarded_for
+        else (
+            x_real_ip
+            if x_real_ip
+            else (request.client.host if request.client else None)
+        )
+    )
+
+    if not client_ip or not verify_trusted_ip(client_ip):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "AUTH_004",
+                "message": "Request does not originate from a trusted IP range",
+                "check_failed": "ip_verification",
+                "client_ip": client_ip,
+            },
+        )
+
+    return {
+        "status": "success",
+        "message": "Privileged action executed successfully",
+        "action": payload.action,
+        "parameters": payload.parameters,
+        "verified_checks": [
+            "session_verification",
+            "role_verification",
+            "approval_token_verification",
+            "ip_verification",
+        ],
+    }
+```
+
+======================================================================
+SLUT PÅ TESTFALL
+======================================================================

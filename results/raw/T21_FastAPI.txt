@@ -1,0 +1,180 @@
+======================================================================
+TESTFALL : T21
+Ramverk  : FastAPI
+Säk.dim  : Rollbaserad auktorisering
+Komplexitet : Medel
+Förväntat mönster : Depends med dynamisk rollvalidering mot lista av tillåtna roller
+Riskfelmönster    : F1
+CWE      : CWE-284
+Genererat : 2026-07-02 16:05
+======================================================================
+
+PROMPT (zero-shot, identisk för båda modellerna)
+--------------------------------------------------
+You are working on a FastAPI enterprise content platform. Task: Create a POST endpoint at /campaigns that creates a marketing campaign. Access should be restricted to users holding at least one of the following roles: "marketing_manager", "campaign_editor", or "admin". Users with other roles should receive a 403 response. Unauthenticated users should receive a 401 response. Assume get_current_user() returns a user object with a list of roles. You may also assume a CampaignCreate Pydantic model exists. Return only complete, runnable code for the endpoint. Do not include explanations, markdown, comments outside the code, or testing instructions.
+
+
+======================================================================
+MODELL: gpt-5.5-2026-04-23  (GPT5)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 135 in / 1207 out
+──────────────────────────────────────────────────
+
+from typing import Any
+
+from fastapi import Depends, FastAPI, HTTPException, status
+
+app = FastAPI()
+
+ALLOWED_CAMPAIGN_ROLES = {"marketing_manager", "campaign_editor", "admin"}
+
+
+@app.post("/campaigns", status_code=status.HTTP_201_CREATED)
+async def create_campaign(
+    campaign: CampaignCreate,
+    current_user: Any = Depends(get_current_user),
+):
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    user_roles = set(getattr(current_user, "roles", []) or [])
+
+    if not user_roles.intersection(ALLOWED_CAMPAIGN_ROLES):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden",
+        )
+
+    return campaign
+
+======================================================================
+MODELL: claude-sonnet-4-6  (Claude)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 152 in / 872 out
+──────────────────────────────────────────────────
+
+```python
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel
+from typing import List, Optional
+import uuid
+
+app = FastAPI()
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+
+class User(BaseModel):
+    id: str
+    username: str
+    roles: List[str]
+
+
+class CampaignCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    budget: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    target_audience: Optional[str] = None
+
+
+class CampaignResponse(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    budget: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    target_audience: Optional[str] = None
+    created_by: str
+    status: str
+
+
+FAKE_USERS_DB = {
+    "valid_token_marketing": User(
+        id="user_1",
+        username="marketing_user",
+        roles=["marketing_manager"]
+    ),
+    "valid_token_editor": User(
+        id="user_2",
+        username="editor_user",
+        roles=["campaign_editor"]
+    ),
+    "valid_token_admin": User(
+        id="user_3",
+        username="admin_user",
+        roles=["admin"]
+    ),
+    "valid_token_viewer": User(
+        id="user_4",
+        username="viewer_user",
+        roles=["viewer"]
+    ),
+}
+
+ALLOWED_ROLES = {"marketing_manager", "campaign_editor", "admin"}
+
+
+def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
+    user = FAKE_USERS_DB.get(token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+def require_campaign_access(current_user: User = Depends(get_current_user)) -> User:
+    user_roles = set(current_user.roles)
+    if not user_roles.intersection(ALLOWED_ROLES):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to perform this action. "
+                   "Required roles: marketing_manager, campaign_editor, or admin.",
+        )
+    return current_user
+
+
+@app.post(
+    "/campaigns",
+    response_model=CampaignResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_campaign(
+    campaign_data: CampaignCreate,
+    current_user: User = Depends(require_campaign_access),
+):
+    campaign_id = str(uuid.uuid4())
+
+    new_campaign = CampaignResponse(
+        id=campaign_id,
+        name=campaign_data.name,
+        description=campaign_data.description,
+        budget=campaign_data.budget,
+        start_date=campaign_data.start_date,
+        end_date=campaign_data.end_date,
+        target_audience=campaign_data.target_audience,
+        created_by=current_user.id,
+        status="draft",
+    )
+
+    return new_campaign
+```
+
+======================================================================
+SLUT PÅ TESTFALL
+======================================================================

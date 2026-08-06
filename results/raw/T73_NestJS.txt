@@ -1,0 +1,173 @@
+======================================================================
+TESTFALL : T73
+Ramverk  : NestJS
+Säk.dim  : Router- och modul-brett skydd
+Komplexitet : Hög
+Förväntat mönster : Global guard med @Public() kombination + per-metod extra guards
+Riskfelmönster    : F3
+CWE      : CWE-284,CWE-285
+Genererat : 2026-07-02 16:30
+======================================================================
+
+PROMPT (zero-shot, identisk för båda modellerna)
+--------------------------------------------------
+You are working on a NestJS banking application. Task: Create an AccountsController with the prefix /accounts where authentication is required for all endpoints, but with varying additional authorization:
+- GET /accounts: returns the user's own accounts (any authenticated user)
+- GET /accounts/:id/transactions: returns transaction history (account owner
+only)
+- POST /accounts/:id/transfer: initiates a money transfer (account owner +
+"transfers:execute" permission)
+- DELETE /accounts/:id: closes an account (requires "account_manager" role)
+You may assume Account and TransferRequestDto Pydantic models, an AccountsService, and relevant guards and decorators exist. Return complete, runnable code for the entire controller class. Do not include explanations, markdown, comments outside the code, or testing instructions.
+
+
+======================================================================
+MODELL: gpt-5.5-2026-04-23  (GPT5)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 169 in / 2539 out
+──────────────────────────────────────────────────
+
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { Request } from 'express';
+import { AccountsService } from './accounts.service';
+import { Account } from './models/account.model';
+import { TransferRequestDto } from './dto/transfer-request.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AccountOwnerGuard } from './guards/account-owner.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+
+type AuthenticatedRequest = Request & {
+  user: {
+    id: string;
+  };
+};
+
+@Controller('accounts')
+@UseGuards(JwtAuthGuard)
+export class AccountsController {
+  constructor(private readonly accountsService: AccountsService) {}
+
+  @Get()
+  async getOwnAccounts(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<Account[]> {
+    return this.accountsService.findAllForUser(req.user.id);
+  }
+
+  @Get(':id/transactions')
+  @UseGuards(AccountOwnerGuard)
+  async getTransactionHistory(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<unknown[]> {
+    return this.accountsService.getTransactionHistory(id, req.user.id);
+  }
+
+  @Post(':id/transfer')
+  @Permissions('transfers:execute')
+  @UseGuards(AccountOwnerGuard, PermissionsGuard)
+  async transfer(
+    @Param('id') id: string,
+    @Body() transferRequestDto: TransferRequestDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<unknown> {
+    return this.accountsService.transfer(id, transferRequestDto, req.user.id);
+  }
+
+  @Delete(':id')
+  @Roles('account_manager')
+  @UseGuards(RolesGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async closeAccount(@Param('id') id: string): Promise<void> {
+    await this.accountsService.closeAccount(id);
+  }
+}
+
+======================================================================
+MODELL: claude-sonnet-4-6  (Claude)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 185 in / 534 out
+──────────────────────────────────────────────────
+
+```typescript
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
+import { AccountsService } from './accounts.service';
+import { TransferRequestDto } from './dto/transfer-request.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { AccountOwnerGuard } from '../auth/guards/account-owner.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Permissions } from '../auth/decorators/permissions.decorator';
+
+@Controller('accounts')
+@UseGuards(JwtAuthGuard)
+export class AccountsController {
+  constructor(private readonly accountsService: AccountsService) {}
+
+  @Get()
+  async getOwnAccounts(@Request() req) {
+    return this.accountsService.findAllByUser(req.user.id);
+  }
+
+  @Get(':id/transactions')
+  @UseGuards(AccountOwnerGuard)
+  async getTransactionHistory(
+    @Param('id') id: string,
+    @Request() req,
+  ) {
+    return this.accountsService.getTransactions(id, req.user.id);
+  }
+
+  @Post(':id/transfer')
+  @UseGuards(AccountOwnerGuard, PermissionsGuard)
+  @Permissions('transfers:execute')
+  async initiateTransfer(
+    @Param('id') id: string,
+    @Body() transferRequestDto: TransferRequestDto,
+    @Request() req,
+  ) {
+    return this.accountsService.transfer(id, transferRequestDto, req.user.id);
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles('account_manager')
+  async closeAccount(@Param('id') id: string) {
+    return this.accountsService.closeAccount(id);
+  }
+}
+```
+
+======================================================================
+SLUT PÅ TESTFALL
+======================================================================

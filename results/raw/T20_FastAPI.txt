@@ -1,0 +1,170 @@
+======================================================================
+TESTFALL : T20
+Ramverk  : FastAPI
+Säk.dim  : Rollbaserad auktorisering
+Komplexitet : Medel
+Förväntat mönster : Depends(require_role) med hierarkisk rollkontroll
+Riskfelmönster    : F1
+CWE      : CWE-284,CWE-285
+Genererat : 2026-07-02 16:05
+======================================================================
+
+PROMPT (zero-shot, identisk för båda modellerna)
+--------------------------------------------------
+You are working on a FastAPI project management application with a hierarchical role system. Task: Create a PUT endpoint at /projects/{project_id}/settings that updates project settings. Access should be granted to users with the "owner" role, or to organization administrators with the "org_admin" role. Regular team members should receive a 403 response. Unauthenticated users should receive a 401 response. Assume get_current_user() is available and returns a user with roles. You may also assume a ProjectSettings Pydantic model exists. Return only complete, runnable code for the endpoint. Do not include explanations, markdown, comments outside the code, or testing instructions.
+
+
+======================================================================
+MODELL: gpt-5.5-2026-04-23  (GPT5)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 139 in / 689 out
+──────────────────────────────────────────────────
+
+from fastapi import APIRouter, Depends, HTTPException, status
+
+router = APIRouter()
+
+
+@router.put("/projects/{project_id}/settings")
+async def update_project_settings(
+    project_id: int,
+    settings: ProjectSettings,
+    current_user=Depends(get_current_user),
+):
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    user_roles = set(getattr(current_user, "roles", []))
+
+    if "owner" not in user_roles and "org_admin" not in user_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions",
+        )
+
+    return {
+        "project_id": project_id,
+        "settings": settings,
+    }
+
+======================================================================
+MODELL: claude-sonnet-4-6  (Claude)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 155 in / 875 out
+──────────────────────────────────────────────────
+
+```python
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
+from typing import Optional, List
+from enum import Enum
+
+app = FastAPI()
+
+security = HTTPBearer()
+
+
+class UserRole(str, Enum):
+    owner = "owner"
+    org_admin = "org_admin"
+    member = "member"
+
+
+class User(BaseModel):
+    id: int
+    username: str
+    roles: List[str]
+
+
+class ProjectSettings(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    visibility: Optional[str] = None
+    allow_member_invite: Optional[bool] = None
+    default_branch: Optional[str] = None
+
+
+FAKE_USERS_DB = {
+    "owner_token": User(id=1, username="project_owner", roles=["owner"]),
+    "org_admin_token": User(id=2, username="org_administrator", roles=["org_admin"]),
+    "member_token": User(id=3, username="regular_member", roles=["member"]),
+}
+
+FAKE_PROJECTS_DB = {
+    1: {"id": 1, "name": "Project Alpha", "owner_id": 1},
+    2: {"id": 2, "name": "Project Beta", "owner_id": 1},
+}
+
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
+    token = credentials.credentials
+    user = FAKE_USERS_DB.get(token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+def check_project_access(project_id: int, current_user: User) -> dict:
+    project = FAKE_PROJECTS_DB.get(project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Project with id {project_id} not found",
+        )
+
+    has_owner_role = "owner" in current_user.roles
+    has_org_admin_role = "org_admin" in current_user.roles
+
+    if not (has_owner_role or has_org_admin_role):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Only project owners or organization administrators can update project settings.",
+        )
+
+    return project
+
+
+@app.put("/projects/{project_id}/settings")
+async def update_project_settings(
+    project_id: int,
+    settings: ProjectSettings,
+    current_user: User = Depends(get_current_user),
+):
+    project = check_project_access(project_id, current_user)
+
+    updated_fields = settings.model_dump(exclude_unset=True)
+
+    updated_project_settings = {
+        "project_id": project_id,
+        "project_name": project["name"],
+        "updated_by": current_user.username,
+        "updated_by_role": current_user.roles,
+        "applied_settings": updated_fields,
+        "message": "Project settings updated successfully",
+    }
+
+    return updated_project_settings
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+======================================================================
+SLUT PÅ TESTFALL
+======================================================================

@@ -1,0 +1,147 @@
+======================================================================
+TESTFALL : T71
+Ramverk  : NestJS
+Säk.dim  : Router- och modul-brett skydd
+Komplexitet : Hög
+Förväntat mönster : Nested controllers med @UseGuards på olika nivåer + modulär struktur
+Riskfelmönster    : F3
+CWE      : CWE-284
+Genererat : 2026-07-02 16:29
+======================================================================
+
+PROMPT (zero-shot, identisk för båda modellerna)
+--------------------------------------------------
+You are working on a NestJS enterprise platform. Task: Create a SecurityController with the prefix /admin/security containing four endpoints:
+- GET /admin/security/logs: returns security audit logs (requires
+"security_admin" role)
+- GET /admin/security/alerts: returns active security alerts (requires
+"security_admin" role)
+- POST /admin/security/lockdown: initiates system lockdown (requires
+"security_admin" role AND "emergency:execute" permission)
+- DELETE /admin/security/sessions: invalidates all active sessions (requires
+"security_admin" role AND "sessions:revoke" permission) All endpoints require authentication. Unauthenticated requests receive 401, unauthorized receive 403. You may assume a SecurityService, RolesGuard, PermissionsGuard, and relevant decorators exist. Return complete, runnable code for the entire controller class. Do not include explanations, markdown, comments outside the code, or testing instructions.
+
+
+======================================================================
+MODELL: gpt-5.5-2026-04-23  (GPT5)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 196 in / 823 out
+──────────────────────────────────────────────────
+
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { SecurityService } from './security.service';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Permissions } from '../auth/decorators/permissions.decorator';
+
+@Controller('admin/security')
+@UseGuards(AuthGuard('jwt'), RolesGuard, PermissionsGuard)
+export class SecurityController {
+  constructor(private readonly securityService: SecurityService) {}
+
+  @Get('logs')
+  @Roles('security_admin')
+  getSecurityAuditLogs() {
+    return this.securityService.getAuditLogs();
+  }
+
+  @Get('alerts')
+  @Roles('security_admin')
+  getActiveSecurityAlerts() {
+    return this.securityService.getActiveAlerts();
+  }
+
+  @Post('lockdown')
+  @HttpCode(HttpStatus.OK)
+  @Roles('security_admin')
+  @Permissions('emergency:execute')
+  initiateSystemLockdown() {
+    return this.securityService.initiateLockdown();
+  }
+
+  @Delete('sessions')
+  @Roles('security_admin')
+  @Permissions('sessions:revoke')
+  invalidateAllActiveSessions() {
+    return this.securityService.invalidateAllSessions();
+  }
+}
+
+======================================================================
+MODELL: claude-sonnet-4-6  (Claude)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 225 in / 440 out
+──────────────────────────────────────────────────
+
+```typescript
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import { SecurityService } from './security.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { PermissionsGuard } from '../guards/permissions.guard';
+import { Roles } from '../decorators/roles.decorator';
+import { Permissions } from '../decorators/permissions.decorator';
+
+@Controller('admin/security')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('security_admin')
+export class SecurityController {
+  constructor(private readonly securityService: SecurityService) {}
+
+  @Get('logs')
+  @HttpCode(HttpStatus.OK)
+  async getSecurityLogs() {
+    return this.securityService.getAuditLogs();
+  }
+
+  @Get('alerts')
+  @HttpCode(HttpStatus.OK)
+  async getSecurityAlerts() {
+    return this.securityService.getActiveAlerts();
+  }
+
+  @Post('lockdown')
+  @UseGuards(PermissionsGuard)
+  @Permissions('emergency:execute')
+  @HttpCode(HttpStatus.OK)
+  async initiateSystemLockdown() {
+    return this.securityService.initiateSystemLockdown();
+  }
+
+  @Delete('sessions')
+  @UseGuards(PermissionsGuard)
+  @Permissions('sessions:revoke')
+  @HttpCode(HttpStatus.OK)
+  async invalidateAllSessions() {
+    return this.securityService.invalidateAllSessions();
+  }
+}
+```
+
+======================================================================
+SLUT PÅ TESTFALL
+======================================================================

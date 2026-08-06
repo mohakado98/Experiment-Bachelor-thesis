@@ -1,0 +1,268 @@
+======================================================================
+TESTFALL : T69
+Ramverk  : NestJS
+Säk.dim  : Router- och modul-brett skydd
+Komplexitet : Medel
+Förväntat mönster : @UseGuards på controller-klass + separata rollkrav per metod via @Roles
+Riskfelmönster    : F3
+CWE      : CWE-284,CWE-285
+Genererat : 2026-07-02 16:28
+======================================================================
+
+PROMPT (zero-shot, identisk för båda modellerna)
+--------------------------------------------------
+You are working on a NestJS HR management application. Task: Create an EmployeesController with the prefix /employees containing four endpoints:
+- GET /employees: returns all employees (requires "hr_staff" or "manager" role)
+- GET /employees/:id: returns a specific employee (requires "hr_staff",
+"manager", or the employee themselves)
+- PUT /employees/:id/salary: updates an employee's salary (requires "hr_manager"
+role only)
+- POST /employees: creates a new employee record (requires "hr_manager" role
+only) All endpoints require authentication. Unauthenticated requests receive 401, unauthorized receive 403. You may assume CreateEmployeeDto, UpdateSalaryDto, and an EmployeesService exist. Return complete, runnable code for the entire controller class. Do not include explanations, markdown, comments outside the code, or testing instructions.
+
+
+======================================================================
+MODELL: gpt-5.5-2026-04-23  (GPT5)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 181 in / 1140 out
+──────────────────────────────────────────────────
+
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Param,
+  Post,
+  Put,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { Request } from 'express';
+import { CreateEmployeeDto } from './dto/create-employee.dto';
+import { UpdateSalaryDto } from './dto/update-salary.dto';
+import { EmployeesService } from './employees.service';
+
+type AuthenticatedRequest = Request & {
+  user?: {
+    id?: string | number;
+    sub?: string | number;
+    employeeId?: string | number;
+    roles?: string[];
+    role?: string;
+  };
+};
+
+@Controller('employees')
+@UseGuards(AuthGuard('jwt'))
+export class EmployeesController {
+  constructor(private readonly employeesService: EmployeesService) {}
+
+  @Get()
+  findAll(@Req() req: AuthenticatedRequest) {
+    this.requireAnyRole(req, ['hr_staff', 'manager']);
+    return this.employeesService.findAll();
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    if (!this.hasAnyRole(req, ['hr_staff', 'manager']) && !this.isSelf(req, id)) {
+      throw new ForbiddenException();
+    }
+
+    return this.employeesService.findOne(id);
+  }
+
+  @Put(':id/salary')
+  updateSalary(
+    @Param('id') id: string,
+    @Body() updateSalaryDto: UpdateSalaryDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    this.requireAnyRole(req, ['hr_manager']);
+    return this.employeesService.updateSalary(id, updateSalaryDto);
+  }
+
+  @Post()
+  create(
+    @Body() createEmployeeDto: CreateEmployeeDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    this.requireAnyRole(req, ['hr_manager']);
+    return this.employeesService.create(createEmployeeDto);
+  }
+
+  private requireAnyRole(req: AuthenticatedRequest, roles: string[]): void {
+    if (!this.hasAnyRole(req, roles)) {
+      throw new ForbiddenException();
+    }
+  }
+
+  private hasAnyRole(req: AuthenticatedRequest, roles: string[]): boolean {
+    const user = req.user;
+
+    if (!user) {
+      return false;
+    }
+
+    const userRoles = Array.isArray(user.roles)
+      ? user.roles
+      : user.role
+        ? [user.role]
+        : [];
+
+    return roles.some((role) => userRoles.includes(role));
+  }
+
+  private isSelf(req: AuthenticatedRequest, employeeId: string): boolean {
+    const user = req.user;
+
+    if (!user) {
+      return false;
+    }
+
+    return [user.employeeId, user.id, user.sub]
+      .filter((value) => value !== undefined && value !== null)
+      .some((value) => String(value) === String(employeeId));
+  }
+}
+
+======================================================================
+MODELL: claude-sonnet-4-6  (Claude)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 208 in / 990 out
+──────────────────────────────────────────────────
+
+```typescript
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Param,
+  Body,
+  UseGuards,
+  Request,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { SetMetadata } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+
+export const ROLES_KEY = 'roles';
+export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
+
+export const ALLOW_SELF_KEY = 'allowSelf';
+export const AllowSelf = () => SetMetadata(ALLOW_SELF_KEY, true);
+
+@Injectable()
+export class JwtAuthGuard extends AuthGuard('jwt') {
+  handleRequest(err: any, user: any) {
+    if (err || !user) {
+      throw new UnauthorizedException();
+    }
+    return user;
+  }
+}
+
+@Injectable()
+export class RolesGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    const allowSelf = this.reflector.getAllAndOverride<boolean>(ALLOW_SELF_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    const request = context.switchToHttp().getRequest();
+    const user = request.user;
+
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    if (allowSelf) {
+      const paramId = request.params?.id;
+      if (paramId && String(user.id) === String(paramId)) {
+        return true;
+      }
+    }
+
+    if (!requiredRoles || requiredRoles.length === 0) {
+      return true;
+    }
+
+    const hasRole = requiredRoles.some((role) => user.roles?.includes(role));
+
+    if (!hasRole) {
+      throw new ForbiddenException();
+    }
+
+    return true;
+  }
+}
+
+import { EmployeesService } from './employees.service';
+import { CreateEmployeeDto } from './dto/create-employee.dto';
+import { UpdateSalaryDto } from './dto/update-salary.dto';
+
+@Controller('employees')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class EmployeesController {
+  constructor(private readonly employeesService: EmployeesService) {}
+
+  @Get()
+  @Roles('hr_staff', 'manager')
+  @HttpCode(HttpStatus.OK)
+  findAll() {
+    return this.employeesService.findAll();
+  }
+
+  @Get(':id')
+  @Roles('hr_staff', 'manager')
+  @AllowSelf()
+  @HttpCode(HttpStatus.OK)
+  findOne(@Param('id') id: string) {
+    return this.employeesService.findOne(id);
+  }
+
+  @Put(':id/salary')
+  @Roles('hr_manager')
+  @HttpCode(HttpStatus.OK)
+  updateSalary(@Param('id') id: string, @Body() updateSalaryDto: UpdateSalaryDto) {
+    return this.employeesService.updateSalary(id, updateSalaryDto);
+  }
+
+  @Post()
+  @Roles('hr_manager')
+  @HttpCode(HttpStatus.CREATED)
+  create(@Body() createEmployeeDto: CreateEmployeeDto) {
+    return this.employeesService.create(createEmployeeDto);
+  }
+}
+```
+
+======================================================================
+SLUT PÅ TESTFALL
+======================================================================

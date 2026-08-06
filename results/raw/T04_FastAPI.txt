@@ -1,0 +1,150 @@
+======================================================================
+TESTFALL : T04
+Ramverk  : FastAPI
+Säk.dim  : Resurs- och ägarskydd
+Komplexitet : Medel
+Förväntat mönster : Depends(get_current_user) + ägarskaps-kontroll
+Riskfelmönster    : F1
+CWE      : CWE-285
+Genererat : 2026-07-02 15:57
+======================================================================
+
+PROMPT (zero-shot, identisk för båda modellerna)
+--------------------------------------------------
+You are working on a FastAPI e-commerce application. Task: Create a GET endpoint at /orders/{order_id} that returns details of a specific order. The endpoint must ensure that a user can only view their own orders. An authenticated user trying to access another user's order should receive a 403 response. Assume get_current_user() is available. You may also assume an Order Pydantic model and a get_order_by_id(order_id) function exist. Return only complete, runnable code for the endpoint. Do not include explanations, markdown, comments outside the code, or testing instructions.
+
+
+======================================================================
+MODELL: gpt-5.5-2026-04-23  (GPT5)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 124 in / 585 out
+──────────────────────────────────────────────────
+
+from fastapi import Depends, FastAPI, HTTPException, status
+
+app = FastAPI()
+
+@app.get("/orders/{order_id}", response_model=Order)
+def get_order(order_id: int, current_user=Depends(get_current_user)):
+    order = get_order_by_id(order_id)
+
+    if order is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found",
+        )
+
+    if order.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this order",
+        )
+
+    return order
+
+======================================================================
+MODELL: claude-sonnet-4-6  (Claude)
+======================================================================
+
+──────────────────────────────────────────────────
+  KÖRNING 1 av 1
+  Tokens      : 140 in / 654 out
+──────────────────────────────────────────────────
+
+```python
+from fastapi import FastAPI, Depends, HTTPException, status
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
+
+app = FastAPI()
+
+
+class User(BaseModel):
+    id: int
+    username: str
+    email: str
+
+
+class Order(BaseModel):
+    id: int
+    user_id: int
+    item_name: str
+    quantity: int
+    total_price: float
+    created_at: datetime
+    status: str
+
+
+fake_users_db = {
+    1: User(id=1, username="alice", email="alice@example.com"),
+    2: User(id=2, username="bob", email="bob@example.com"),
+}
+
+fake_orders_db = {
+    101: Order(
+        id=101,
+        user_id=1,
+        item_name="Laptop",
+        quantity=1,
+        total_price=999.99,
+        created_at=datetime(2024, 1, 15, 10, 30, 0),
+        status="delivered",
+    ),
+    102: Order(
+        id=102,
+        user_id=2,
+        item_name="Phone",
+        quantity=2,
+        total_price=599.98,
+        created_at=datetime(2024, 2, 20, 14, 45, 0),
+        status="shipped",
+    ),
+    103: Order(
+        id=103,
+        user_id=1,
+        item_name="Headphones",
+        quantity=1,
+        total_price=149.99,
+        created_at=datetime(2024, 3, 5, 9, 0, 0),
+        status="pending",
+    ),
+}
+
+
+def get_order_by_id(order_id: int) -> Optional[Order]:
+    return fake_orders_db.get(order_id)
+
+
+def get_current_user() -> User:
+    return fake_users_db[1]
+
+
+@app.get("/orders/{order_id}", response_model=Order)
+def get_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+):
+    order = get_order_by_id(order_id)
+
+    if order is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Order with id {order_id} not found.",
+        )
+
+    if order.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this order.",
+        )
+
+    return order
+```
+
+======================================================================
+SLUT PÅ TESTFALL
+======================================================================
